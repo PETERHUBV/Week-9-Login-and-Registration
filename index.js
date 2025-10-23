@@ -1,11 +1,28 @@
 import express from "express";
 import dotenv from "dotenv";
 import { MongoClient } from "mongodb";
+import jwt from "jsonwebtoken";
 dotenv.config();
+app.use(express.urlencoded({ extended: true })); 
+
 async function connectDB() {
+  const authenticateToken = (req, res, next) => {
+    const authenHeader = req.headers["authorization"]; 
+     const token = authHeader&& authHeader.split(" ")[1];
+     if(!token){
+      return res.status (401).json({ error: "Access token required "});
+  }
+  jwt.verify (token, process.env.JWT_TOKEN, (err, user) => { 
+    if (err) {
+      return res.status(403).json({error: "Invalid or expired token."});
+    }
+req.user  = user;
+  })
+};
   try {
     const client = await MongoClient.connect(process.env.MONGODB_URI);
     db = client.db(process.env.MONGODB_DBNAME);
+    const customerCollections= db.collection("customers");
     console.log("Connected to MongoDB");
   } catch (err) {
     console.error("Failed to connect: ", err);
@@ -17,114 +34,82 @@ const PORT = process.env.PORT || 3000;
 
 connectDB().then(() => {
     app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+    console.log(`Server running on http://localhost: ${PORT}`);
      });
      app.get("/", (req, res) => {
     res.status(200).json({
       message: "Welcome to Web Programming MongoDB.",
     });
     
-    app.get("(/Start)",(req, res)=> {
-        res.send("Received");
+
     });
  
   });
-   app.post("/customer", async (req, res) => {
-    //name, address, email, contact
-    const { name, address, email, contact } = req.body; //null
+   app.get("/customer", async (req, res) => {
+   try{
+    const { username,  email} = req.query;
+    let filter = {};
+    if(username) filter.username = username;
+    if(email) filter.email = email;
 
-    console.log("post: ", name, address, email, contact);
-    //   const client = MongoClient(process.env.MONGODB_URI);
-    //   await client.connect();
-    //   const db = client.db(process.env.MONGODB_DBNAME);
-    //   const collection = db.collection("customers");
+    const customers = await customerCollections.find(filter).toArray();
+    res.status(200).json({data: customers, message: "Customers retrieved successfully."});
+   }catch(error) {
 
-    //   const customer = await collection.insertOne({
-    //     name,
-    //     address,
-    //     email,
-    //     contact,
-    //   });
-const client = new.mongodb.MongoClient(process.env.MONGODB_URI );
-const dbName = process.env.MONGODB_DBNAME ||  "setup_express"
-const db = client.db(dbName);
-
-async function connectToDatabase(){
-  try{
-    await client.connect();
-    console.log("connected to MongoDB")
-
-  } catch(error){
-console.error("Failed to connect to the database", error);
-  }
-}
- connectToDatabase().then(() => {
-app.listen(PORT,() => {
-  console.log('Server is running on mongodb://localhost:${PORT}')
+    res.status(500).json({message: "Internal Server Error.", error: error.message});
+   }
+   });
+   app.post("/customers", async (req, res) => {
+    try{
+      
+    const {username, email, password, first_name, last_name, phone, address} = req.body; 
+    if(!username || !email || !password || !first_name || !last_name){
+      return res.status(400).json({
+        message: "Missing required fields.",
+        fields: {username, email, password, first_name, last_name},
+      });
+    }
+    const newCustomers = {...req.body, created_at: new Date()};
+    const result = await customerCollections.insertone(newCustomers);
+    res.status(201).json({
+data: result,
+message: "Working"
 });
 
-app.get("/customers",async(req,res) =>{
-try{
-  const {username, email}= req.query;
-  let filter ={};
-  if(username)filter.username = username;
-  if(email)filter.email= email;
-  const customers = await customerCollections.find(filter).toArray();
-
-res 
-.status(200)
-.json({data: customers, message: "Customers retrieved successfully"});
- } catch(error){
-    res 
-    .status(500)
-    .json({message: "Internal Server Error", error: error.message});
-  }
- }
- function routeExists(path, method){
-  const normalizedPath =
-  path.endsWith("/") && path.length > 1 ? path.slice(0,-1): path;
-  for (const layer of app.router.stack){
-if(layer.route){
-  const routePath =
-  layer.route.path.endsWith("/") && layer.route.path.length>1
-  ? layer.route.path.slice(0,-1)
-  : layer.route.path;
-
-  if(routePath === normalizedPath){
-    for (const m in layer.route.methods){
-      if(m === method.toLowerCase()){
-        return true;
-      }
-
-    }
-  }
-}
- app.post("/customer", async (req, res) => {
+app.put("/customers/:id", async (req, res) => {
   try{
-    //name, address, email, contact
-    const { name, address, email, contact } = req.body
+    const {username, email, password, first_name, lastIname, phone, address}= req.body;
+    if(!username || email || !password || !first_name || last_name){
+      return res.status(400).json({
+        message: "Missing required fields.",
+        fields: {username, email, password, first_name, last_name},
+      });
+    } 
+    const customerID = new mongodb.ObjectId (req.params.id);
+    const updatedCustomer = { ...req.body, updated_at: new Date()};
+    const result = await customerCollections.updateOne({_id: customerID}, {$set: updatedCustomer});
+res.status(200).json({
+  data: result,
+message: "customer updated is succeed successfully"
 
-    if(!username || !email, || first_name, last_name),
-  
-  }
-  const newCustomer = {...req.body, created_at: new Date()};
-  const result = await customerCollections.insertOne
-} catch (error){
-    res 
-    .status(500)
-    .json({message: "Internal Server Error", error: error.message});
- }
-const CustomerId = new.mongodb.ObjectId(req.params.id);
-const updatedCustomer = {...req.body, updated_at: new Date() };
-const result = await customerCollections.updateOne(
-  {_id: customerID}, {$set: updatedCustomer}
-);
 
+});
+}catch(error) {
+  res.status(500).json({message: "Internal Server Error.", error: message.error});
 }
-    res.status(201).json({
-      message: "Customer successfully created",
-      data: customer,
-      
-    });
-  });
-    });
+});
+app.delete("/customers/:id", async (req, res) => {
+  try{
+    const customerID = new mongodb.ObjectId (req.params.id);
+    const result = await customerCollections.deleteOne({_id: customerID});
+
+res.status(200).json({
+  data: result,
+message: "customer deleted is succeed successfully"
+});
+}catch(error) {
+res.status(500).json({message: "Internal Server Error.", error: message.error});
+}
+});
+    
+
